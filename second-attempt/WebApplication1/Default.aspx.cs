@@ -9,25 +9,34 @@ using System.Web.UI.WebControls;
 using System.Web.UI.WebControls.WebParts;
 using System.Web.UI.HtmlControls;
 
+using System.Collections.Generic;
+
 using System.Threading;
 
 namespace WebApplication1
 {
+	/**
+	 * The only purpose of this web page is to send a message to all registered listeners
+	 * of the webhandler. This is accomplished by sending a message to a static method
+	 */
 	public partial class _Default : System.Web.UI.Page
 	{
-		protected void Page_Load( object sender, EventArgs e )
-		{
-
-		}
+		protected void Page_Load( object sender, EventArgs e ) {}
 
 		protected void Button1_ServerClick( object sender, EventArgs e )
 		{
 			// signal id
-			foreach( Handler1.MyCallback callback in Handler1.callbacks ) {
-				// todo: use threadpool to invoke 
-				callback.Invoke( message.Value );
+
+			// note that we can't use an iterator-based solution for going
+			// through all callbacks because we want to remove dead ones
+			// from the list internally -
+
+			Handler1.CallAllConnectedClients( message.Value );
+			Handler1.DeleteDisconnectedClients();
 			
-			}
+
+			
+			
 			
 		}
 	}

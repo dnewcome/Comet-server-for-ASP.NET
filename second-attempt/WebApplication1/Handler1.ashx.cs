@@ -2,9 +2,11 @@ using System;
 using System.Web;
 using System.Threading;
 using System.Collections.Generic;
+using System.Collections;
 
 namespace WebApplication1
 {
+
 	class Handler1 : IHttpAsyncHandler
 	{
 		/*
@@ -13,19 +15,93 @@ namespace WebApplication1
 		 * requests, it merely means that the class must be thread safe in order to be used
 		 * as a reusable request handler
 		 */
-		public bool IsReusable { get { return false; } }
-		public delegate void MyCallback( string message );
+		public bool IsReusable { 
+			get { return false; } 
+		}
 
-		public static List<MyCallback> callbacks;
+		private static List<string> m_keysFlaggedForDeletion;
 
+		public delegate void MyCallback( string message, string key );
+
+		public static Dictionary<String, CallbackContext> callbacks;
+
+		/*
+		 * Type initializer for handler - set up the callbacks data structure here
+		 */
 		static Handler1() {
-			System.Diagnostics.Trace.WriteLine( "Running Type initializer for Handler1" );
-			callbacks = new List<MyCallback>();
+			System.Diagnostics.Trace.WriteLine( "Running Type initializer for Handler1" );	
+			callbacks = new Dictionary<String, CallbackContext>();
+			m_keysFlaggedForDeletion = new List<string>();
+		}
+
+		/**
+		 * invoke the callbacks - this is a static method
+		 * I was thinking about how this could be abused in a multithreaded 
+		 * environment, so doing a pretty pessimistic lock here
+		 */
+		public static void CallAllConnectedClients( string in_message ) {
+			// get a burly, coarse-grained lock here
+			lock( typeof( Handler1 ) ) {
+				foreach( string key in Handler1.callbacks.Keys ) {
+					// todo: use threadpool to invoke 
+					Handler1.callbacks[ key ].Callback.Invoke( in_message, key );
+				}
+			}
+		}
+
+		/*
+		 * Since we can't delete unused items during the iteration when we are 
+		 * performing the callbacks, we need another method to do it after the fact
+		 * 
+		 * note that it is a hack for this to be static. we are asking for issues with
+		 * thread safety here
+		 */
+		public static void DeleteDisconnectedClients() {
+			foreach( string key in m_keysFlaggedForDeletion ) {
+				callbacks.Remove( key );
+			}
+			m_keysFlaggedForDeletion.Clear();
+			System.Diagnostics.Trace.WriteLine( "There are " + callbacks.Count + " callbacks registered after purging" );
 		}
 
 		// constructor
 		public Handler1() {
-			System.Diagnostics.Trace.WriteLine( "Instantiating handler" );
+			System.Diagnostics.Trace.WriteLine( "Instantiating handler instance" );
+		}
+
+		/**
+		 * write to output so that most browsers will show text without having completed the request
+		 */
+		private void flush( HttpContext in_context ) {
+			for( int i=0; i < 1000; i++ ) {
+				in_context.Response.Write( "<span></span>" );
+			}
+			in_context.Response.Flush();
+		}
+
+		~Handler1() {
+			System.Diagnostics.Trace.WriteLine( "Finalizing handler instance" );
+		}
+
+		/**
+		 * this is the method that we want to fire periodically from another thread
+		 */
+		public void Callback( string in_message, string in_key ) {
+			CallbackContext context = callbacks[ in_key ];
+
+			System.Diagnostics.Trace.WriteLine( "calling callback with message " + in_message );
+
+		
+			// note that IsClientConnected doesn't get set until there has been a failure
+			// so the first time we try to write to disconnected response will result in first chance exception
+			// that we can't catch here for some reason
+			if( context.Context.Response.IsClientConnected ) {
+				context.Context.Response.Write( "<p>CallBack: Thread " + Thread.CurrentThread.ManagedThreadId + " " + in_message + "</p>" );
+				flush( context.Context );
+			}
+			else {
+				m_keysFlaggedForDeletion.Add( in_key );
+			}
 		}
 
 		/*
@@ -37,7 +113,8 @@ namespace WebApplication1
 		public IAsyncResult BeginProcessRequest( HttpContext context, AsyncCallback cb, Object extraData ) {
 			context.Response.Write( "<p>BeginProcessReqeust: Thread " + Thread.CurrentThread.ManagedThreadId + "</p>");
 			AsyncOperation async = new AsyncOperation( cb, context, extraData );
-			callbacks.Add( new MyCallback( async.Callback ) );
+			CallbackContext cbx = new CallbackContext( new MyCallback( Callback ), context ); 
+			callbacks.Add( Guid.NewGuid().ToString(), cbx );
 			return async;
 		}
 
@@ -62,21 +139,32 @@ namespace WebApplication1
 
 	} // class
 
+	/**
+	 * Custom IAsyncResult implementation
+	 */
 	class AsyncOperation : IAsyncResult
 	{
-		private bool m_completed;
-		private Object m_state;
+		bool IAsyncResult.IsCompleted { 
+			get { return m_completed; }
+		} private bool m_completed;
+		
+		WaitHandle IAsyncResult.AsyncWaitHandle { 
+			get { return null; } 
+		}
+		
+		Object IAsyncResult.AsyncState { 
+			get { return m_state; } 
+		} private Object m_state;
+		
+		bool IAsyncResult.CompletedSynchronously { 
+			get { return false; } 
+		}
+		
+		public HttpContext Context { 
+			get { return m_context; } 
+		} private HttpContext m_context;
+
 		private AsyncCallback m_callback;
-		private HttpContext m_context;
-
-		private WaitOrTimerCallback m_wtCallback;
-
-
-		bool IAsyncResult.IsCompleted { get { return m_completed; } }
-		WaitHandle IAsyncResult.AsyncWaitHandle { get { return null; } }
-		Object IAsyncResult.AsyncState { get { return m_state; } }
-		bool IAsyncResult.CompletedSynchronously { get { return false; } }
-		public HttpContext Context { get { return m_context; } }
 
 		public AsyncOperation( AsyncCallback in_callback, HttpContext in_context, Object in_state ) {
 			m_callback = in_callback;
@@ -84,55 +172,25 @@ namespace WebApplication1
 			m_state = in_state;
 			m_completed = false;
 		}
-
-		public void StartAsyncWork() {
-			//ThreadPool.QueueUserWorkItem( new WaitCallback( StartAsyncTask ), null );
-			
-			/*
-			m_wtCallback = new WaitOrTimerCallback( Callback );
-			AutoResetEvent are = new AutoResetEvent( false );
-			ThreadPool.RegisterWaitForSingleObject( are, m_wtCallback, null, 1000, false );
-			*/
-
-			
-			
-
-		}
-
-		/**
-		 * this is the method that we want to fire periodically from another thread
-		 */
-		public void Callback( string in_message ) {
-			
-			System.Diagnostics.Trace.WriteLine( "calling callback with message " + in_message );
-			
-			m_context.Response.Write( "<p>CallBack: Thread " + Thread.CurrentThread.ManagedThreadId + " " + in_message + "</p>" );
-			flush();
-		}
-
-		private void StartAsyncTask( Object workItemState ) {
-			m_context.Response.Write( "<p>StartAsyncTask: Thread " + Thread.CurrentThread.ManagedThreadId + "</p>" );
-			flush();
-
-			// not sure how essential the completed attribute is. Things seem to work without it
-			// m_completed = true;
-
-			// we need to call the callback at the end of our async task, otherwise we never complete
-			// m_callback( this );
-		}
-
-		/**
-		 * write to output so that most browsers will show text without having completed the request
-		 */
-		private void flush()
-		{
-			for( int i=0; i < 1000; i++ )
-			{
-				m_context.Response.Write( "<span></span>" );
-			}
-			m_context.Response.Flush();
-		}
-
-
 	} // class
+
+	/**
+	* Class to hold the callback and the http context that we are calling
+	*/
+	class CallbackContext
+	{
+		public CallbackContext( Handler1.MyCallback in_callback, HttpContext in_context ) {
+			m_callback = in_callback;
+			m_context = in_context;
+		}
+
+		public Handler1.MyCallback Callback {
+			get { return m_callback; }
+		} private Handler1.MyCallback m_callback;
+
+		public HttpContext Context {
+			get { return m_context; }
+		} private HttpContext m_context;
+	} // class
+
 } // namespace WebApplication1
