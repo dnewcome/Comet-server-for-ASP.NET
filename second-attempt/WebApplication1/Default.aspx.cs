@@ -21,7 +21,12 @@ namespace WebApplication1
 	 */
 	public partial class _Default : System.Web.UI.Page
 	{
-		protected void Page_Load( object sender, EventArgs e ) {}
+		protected void Page_Load( object sender, EventArgs e ) {
+			foreach( string key in Handler1.callbacks.Keys ) {
+			Response.Write( key + "<br>" );
+			}
+			
+		}
 
 		protected void Button1_ServerClick( object sender, EventArgs e )
 		{
@@ -33,11 +38,11 @@ namespace WebApplication1
 
 			Handler1.CallAllConnectedClients( message.Value );
 			Handler1.DeleteDisconnectedClients();
-			
+		}
 
-			
-			
-			
+		protected void Button2_ServerClick( object sender, EventArgs e ) {
+			Handler1.CallConnectedClient( message.Value, clientID.Value );
+			Handler1.DeleteDisconnectedClients();
 		}
 	}
 }

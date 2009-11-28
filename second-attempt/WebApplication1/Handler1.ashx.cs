@@ -49,6 +49,10 @@ namespace WebApplication1
 			}
 		}
 
+		public static void CallConnectedClient( string in_message, string in_id ) {
+			Handler1.callbacks[ in_id ].Callback.Invoke( in_message, in_id );
+		}
+
 		/*
 		 * Since we can't delete unused items during the iteration when we are 
 		 * performing the callbacks, we need another method to do it after the fact
