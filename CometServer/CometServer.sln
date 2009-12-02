@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 9.00
 # Visual Studio 2005
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CometServer", "WebApplication1\CometServer.csproj", "{4D6EB130-9C74-4D6C-90E7-5885D9F6CFBB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CometServer", "CometServer\CometServer.csproj", "{4D6EB130-9C74-4D6C-90E7-5885D9F6CFBB}"
 	ProjectSection(WebsiteProperties) = preProject
 		Debug.AspNetCompiler.Debug = "True"
 		Release.AspNetCompiler.Debug = "False"
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CometTestClient", "ConsoleApplication1\CometTestClient.csproj", "{56BB9C36-5EB1-46AA-A565-A96A967ACA87}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CometTestClient", "CometTestClient\CometTestClient.csproj", "{56BB9C36-5EB1-46AA-A565-A96A967ACA87}"
 	ProjectSection(WebsiteProperties) = preProject
 		Debug.AspNetCompiler.Debug = "True"
 		Release.AspNetCompiler.Debug = "False"
